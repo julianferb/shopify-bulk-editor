@@ -13,7 +13,7 @@ const APPLY_READ = `#graphql
       ... on Product {
         id
         status
-        variants(first: 100) { edges { node { id price } } }
+        variants(first: 100) { edges { node { id price compareAtPrice } } }
         metafield(namespace: $ns, key: $key) @include(if: $wantMetafield) { value }
       }
     }
@@ -71,7 +71,15 @@ interface ApplyReadNode {
   node: {
     id: string;
     status: string;
-    variants: { edges: { node: { id: string; price: string } }[] };
+    variants: {
+  edges: {
+    node: {
+      id: string;
+      price: string;
+      compareAtPrice: string | null;
+    };
+  }[];
+};
     metafield: { value: string } | null;
   } | null;
 }
@@ -93,12 +101,32 @@ function metafieldReadVars(before: Snapshot): { ns: string; key: string; wantMet
 function isStale(before: Snapshot, node: ApplyReadNode["node"]): boolean {
   if (!node) return false;
   if (before.variants) {
-    const liveById = new Map(node.variants.edges.map((edge) => [edge.node.id, edge.node.price]));
-    for (const variant of before.variants) {
-      const live = liveById.get(variant.id);
-      if (live === undefined || Number(live) !== Number(variant.price)) return true;
+  const liveById = new Map(
+    node.variants.edges.map((edge) => [edge.node.id, edge.node]),
+  );
+
+  for (const variant of before.variants) {
+    const live = liveById.get(variant.id);
+
+    if (!live) {
+      return true;
+    }
+
+    if (
+      variant.price !== undefined &&
+      Number(live.price) !== Number(variant.price)
+    ) {
+      return true;
+    }
+
+    if (
+      variant.compareAtPrice !== undefined &&
+      live.compareAtPrice !== variant.compareAtPrice
+    ) {
+      return true;
     }
   }
+}
   if (before.status !== undefined && node.status !== before.status) return true;
   if (before.metafield) {
     const liveValue = node.metafield?.value ?? null;
@@ -152,7 +180,15 @@ async function applyItem(
         UPDATE_PRICES,
         {
           productId: item.productGid,
-          variants: after.variants.map((variant) => ({ id: variant.id, price: variant.price })),
+          variants: after.variants.map((variant) => ({
+  id: variant.id,
+  ...(variant.price !== undefined
+    ? { price: variant.price }
+    : {}),
+  ...(variant.compareAtPrice !== undefined
+    ? { compareAtPrice: variant.compareAtPrice }
+    : {}),
+})),
         },
       );
       const error = firstError(data.productVariantsBulkUpdate.userErrors);

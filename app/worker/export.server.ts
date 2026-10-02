@@ -16,7 +16,7 @@ import { unauthenticated } from "~/shopify.server";
 const EXPORT_DIR = "storage/exports";
 
 const EXPORT_FIELDS =
-  "id title handle vendor status tags variants { edges { node { id title price } } }";
+  "id title handle vendor status tags variants { edges { node { id title price compareAtPrice } } }";
 
 const BULK_OP_STATUS = `#graphql
   query BulkOpStatus($id: ID!) {

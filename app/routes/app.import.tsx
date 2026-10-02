@@ -40,9 +40,12 @@ function buildAfter(product: ImportProduct): Snapshot {
   const after: Snapshot = {};
   if (product.variants.length > 0) {
     after.variants = product.variants.map((variant) => ({
-      id: variant.variantId,
-      price: variant.price,
-    }));
+  id: variant.variantId,
+  ...(variant.price !== undefined ? { price: variant.price } : {}),
+  ...(variant.compareAtPrice !== undefined
+    ? { compareAtPrice: variant.compareAtPrice }
+    : {}),
+}));
   }
   if (product.status !== null) after.status = product.status;
   if (product.tags !== null) after.tags = { list: product.tags, delta: [] };
@@ -142,6 +145,11 @@ const COLUMN_REFERENCE: string[][] = [
   ["product_id", "Required", "The product GID, as exported."],
   ["variant_id", "Required", "The variant GID, as exported."],
   ["price", "Editable", "Per variant. A number with no currency symbol."],
+  [
+  "compare_at_price",
+  "Editable",
+  "Per variant. Original/list price. Leave blank to remove it.",
+  ],
   ["status", "Editable", "Product-level. ACTIVE, DRAFT, or ARCHIVED."],
   ["tags", "Editable", "Product-level. Full comma-separated replacement list."],
 ];

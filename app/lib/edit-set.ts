@@ -194,7 +194,8 @@ export function validateEditSet(raw: unknown): ValidationResult {
 
 export interface VariantPrice {
   id: string;
-  price: string;
+  price?: string;
+  compareAtPrice?: string | null;
 }
 
 export interface TagSnapshot {
@@ -269,19 +270,46 @@ export function computeItem(current: ProductState, editSet: EditSet): ItemComput
 
   for (const op of editSet.operations) {
     if (op.field === "price") {
-      before.variants = current.variants.map((variant) => ({ ...variant }));
-      const nextVariants: VariantPrice[] = [];
-      for (const variant of current.variants) {
-        const nextNumber = computePriceNumber(variant.price, op);
-        if (nextNumber < 0) {
-          invalidMessage = "A resulting price would be negative.";
-        }
-        const nextPrice = nextNumber.toFixed(2);
-        if (fmt(variant.price) !== nextPrice) changed = true;
-        nextVariants.push({ id: variant.id, price: nextPrice });
-      }
-      after.variants = nextVariants;
-    } else if (op.field === "status") {
+  before.variants = current.variants.map((variant) => ({ ...variant }));
+  const nextVariants: VariantPrice[] = [];
+
+  for (const variant of current.variants) {
+    if (variant.price === undefined) {
+      invalidMessage = "A variant is missing its current price.";
+      continue;
+    }
+
+    const nextNumber = computePriceNumber(variant.price, op);
+
+    if (nextNumber < 0) {
+      invalidMessage = "A resulting price would be negative.";
+    }
+
+    const nextPrice = nextNumber.toFixed(2);
+
+    if (fmt(variant.price) !== nextPrice) {
+      changed = true;
+    }
+
+    // Si es una rebaja porcentual, el precio anterior pasa a compare-at price.
+    const nextCompareAtPrice =
+      op.op === "adjust_percent" && Number(op.value) < 0
+        ? fmt(variant.price)
+        : variant.compareAtPrice;
+
+    if (variant.compareAtPrice !== nextCompareAtPrice) {
+      changed = true;
+    }
+
+    nextVariants.push({
+      id: variant.id,
+      price: nextPrice,
+      compareAtPrice: nextCompareAtPrice,
+    });
+  }
+
+  after.variants = nextVariants;
+} else if (op.field === "status") {
       before.status = current.status;
       after.status = op.value;
       if (current.status !== op.value) changed = true;

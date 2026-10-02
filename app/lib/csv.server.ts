@@ -16,6 +16,7 @@ export const CSV_COLUMNS = [
   "status",
   "tags",
   "price",
+  "compare_at_price",
 ] as const;
 
 // Prefix cells that a spreadsheet could read as a formula so they render as
@@ -39,6 +40,7 @@ interface BulkVariant {
   id: string;
   title?: string;
   price?: string;
+  compareAtPrice?: string | null;
   __parentId?: string;
 }
 
@@ -77,6 +79,7 @@ export function jsonlToCsv(jsonl: string): string {
       product?.status ?? "",
       (product?.tags ?? []).join(", "),
       variant.price ?? "",
+      variant.compareAtPrice ?? "",
     ];
     return cells.map(escapeCsvCell);
   });
@@ -91,7 +94,11 @@ export function jsonlToCsv(jsonl: string): string {
 export interface ImportProduct {
   productGid: string;
   productTitle: string;
-  variants: { variantId: string; price: string }[];
+  variants: { 
+	variantId: string; 
+	price?: string;
+        compareAtPrice?: string | null; 
+  }[];
   status: string | null;
   tags: string[] | null;
   firstRow: number;
@@ -114,7 +121,7 @@ export interface ImportParseResult {
 
 const KNOWN_COLUMNS = new Set(CSV_COLUMNS as unknown as string[]);
 // The columns an import may change; product_id/variant_id only identify the target.
-const EDITABLE_COLUMNS = ["price", "status", "tags"];
+const EDITABLE_COLUMNS = ["price", "compare_at_price", "status", "tags"];
 const STATUS_VALUES = ["ACTIVE", "DRAFT", "ARCHIVED"];
 // Money with at most two decimal places. Shopify rounds prices to the currency's
 // decimal precision, so accepting three-plus decimals here would let the stored
@@ -177,7 +184,7 @@ export function parseImportCsv(content: string): ImportParseResult {
   // would stage as skipped_unchanged, so reject it up front rather than let the
   // merchant apply a silent no-op.
   if (!EDITABLE_COLUMNS.some((name) => header.includes(name))) {
-    return fail("The file has no editable columns. Include at least one of: price, status, tags.");
+    return fail("The file has no editable columns. Include at least one of: price, compare_at_price, status, tags.");
   }
 
   const dataRows = rows.slice(1);
@@ -192,6 +199,7 @@ export function parseImportCsv(content: string): ImportParseResult {
     variantId: index("variant_id"),
     productTitle: index("product_title"),
     price: index("price"),
+    compareAtPrice: index("compare_at_price"),
     status: index("status"),
     tags: index("tags"),
   };
@@ -225,6 +233,30 @@ export function parseImportCsv(content: string): ImportParseResult {
       price = raw;
     }
 
+    let compareAtPrice: string | null | undefined = undefined;
+
+    if (cols.compareAtPrice >= 0) {
+      const raw = cell(cols.compareAtPrice);
+
+      if (raw === "") {
+        // Columna presente pero vacía = quitar precio de comparación.
+        compareAtPrice = null;
+      } else {
+        if (!AMOUNT.test(raw)) {
+          const detail = OVER_PRECISION.test(raw)
+            ? "has more than two decimal places"
+            : "is not a valid amount";
+
+          invalid(
+            `row ${csvRow}, column compare_at_price: "${raw}" ${detail}`,
+          );
+          return;
+        }
+
+      compareAtPrice = raw;
+        }
+      }
+
     let status: string | null = null;
     if (cols.status >= 0 && cell(cols.status) !== "") {
       const raw = cell(cols.status);
@@ -250,7 +282,16 @@ export function parseImportCsv(content: string): ImportParseResult {
       products.set(productGid, {
         productGid,
         productTitle,
-        variants: price === null ? [] : [{ variantId, price }],
+        variants:
+          price === null && compareAtPrice === undefined
+          ? []
+          : [
+             {
+               variantId,
+               ...(price !== null ? { price } : {}),
+               ...(compareAtPrice !== undefined ? { compareAtPrice } : {}),
+             },
+            ],
         status,
         tags,
         firstRow: csvRow,
@@ -266,7 +307,13 @@ export function parseImportCsv(content: string): ImportParseResult {
       invalid(`row ${csvRow}, column tags: conflicts with row ${existing.firstRow}`);
       return;
     }
-    if (price !== null) existing.variants.push({ variantId, price });
+    if (price !== null || compareAtPrice !== undefined) {
+      existing.variants.push({
+        variantId,
+        ...(price !== null ? { price } : {}),
+        ...(compareAtPrice !== undefined ? { compareAtPrice } : {}),
+      });
+    }
     if (existing.status === null) existing.status = status;
     if (existing.tags === null) existing.tags = tags;
   });

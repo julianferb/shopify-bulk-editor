@@ -19,7 +19,7 @@ const PRODUCT_FIELDS = `
   title
   status
   tags
-  variants(first: 100) { edges { node { id price } } }
+  variants(first: 100) { edges { node { id price compareAtPrice } } }
   metafield(namespace: $ns, key: $key) @include(if: $wantMetafield) { value type }
 `;
 
@@ -45,7 +45,15 @@ interface RawProduct {
   title: string;
   status: string;
   tags: string[];
-  variants: { edges: { node: { id: string; price: string } }[] };
+  variants: {
+  edges: {
+    node: {
+      id: string;
+      price: string;
+      compareAtPrice: string | null;
+    };
+  }[];
+  };
   metafield: { value: string; type: string } | null;
 }
 
@@ -71,7 +79,11 @@ function toStaged(node: RawProduct): StagedProduct {
     title: node.title,
     status: node.status,
     tags: node.tags,
-    variants: node.variants.edges.map((edge) => ({ id: edge.node.id, price: edge.node.price })),
+    variants: node.variants.edges.map((edge) => ({
+  id: edge.node.id,
+  price: edge.node.price,
+  compareAtPrice: edge.node.compareAtPrice,
+})),
     metafield: node.metafield ? { value: node.metafield.value, type: node.metafield.type } : null,
   };
 }
@@ -138,25 +150,57 @@ async function fetchTargets(
 // Live values for the fields an import row targets, used as the before-snapshot.
 function buildImportBefore(product: StagedProduct, after: Snapshot): Snapshot {
   const before: Snapshot = {};
+
   if (after.variants) {
-    const liveById = new Map(product.variants.map((variant) => [variant.id, variant.price]));
-    before.variants = after.variants.map((variant) => ({
-      id: variant.id,
-      price: liveById.get(variant.id) ?? "0.00",
-    }));
+    const liveById = new Map(
+      product.variants.map((variant) => [variant.id, variant]),
+    );
+
+    before.variants = after.variants.map((variant) => {
+      const live = liveById.get(variant.id);
+
+      return {
+        id: variant.id,
+        ...(variant.price !== undefined
+          ? { price: live?.price ?? "0.00" }
+          : {}),
+        ...(variant.compareAtPrice !== undefined
+          ? { compareAtPrice: live?.compareAtPrice ?? null }
+          : {}),
+      };
+    });
   }
+
   if (after.status !== undefined) before.status = product.status;
   if (after.tags) before.tags = { list: product.tags, delta: [] };
+
   return before;
 }
 
 function importUnchanged(before: Snapshot, after: Snapshot): boolean {
   if (after.variants && before.variants) {
-    const liveById = new Map(before.variants.map((variant) => [variant.id, variant.price]));
-    for (const variant of after.variants) {
-      if (Number(liveById.get(variant.id)) !== Number(variant.price)) return false;
+  const liveById = new Map(
+    before.variants.map((variant) => [variant.id, variant]),
+  );
+
+  for (const variant of after.variants) {
+    const live = liveById.get(variant.id);
+
+    if (
+      variant.price !== undefined &&
+      Number(live?.price) !== Number(variant.price)
+    ) {
+      return false;
+    }
+
+    if (
+      variant.compareAtPrice !== undefined &&
+      live?.compareAtPrice !== variant.compareAtPrice
+    ) {
+      return false;
     }
   }
+}
   if (after.status !== undefined && before.status !== after.status) return false;
   if (after.tags && before.tags) {
     const liveSet = [...before.tags.list].sort().join(",");

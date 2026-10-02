@@ -12,6 +12,7 @@ export default defineConfig({
   server: {
     port: Number(process.env.PORT || 3000),
     host: "localhost",
+    allowedHosts: true,
   },
   plugins: [
     remix({

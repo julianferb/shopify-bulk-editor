@@ -63,19 +63,71 @@ interface PreviewItem {
   changes: ChangeRow[];
 }
 
-function priceText(variants: { price: string }[]): string {
-  if (variants.length === 0) return "—";
-  const amounts = variants.map((variant) => Number(variant.price));
+function priceText(variants: { price?: string }[]): string {
+  const amounts = variants
+    .filter((variant) => variant.price !== undefined)
+    .map((variant) => Number(variant.price));
+
+  if (amounts.length === 0) return "—";
+
   const min = Math.min(...amounts);
   const max = Math.max(...amounts);
-  return min === max ? min.toFixed(2) : `${min.toFixed(2)}–${max.toFixed(2)}`;
+
+  return min === max
+    ? min.toFixed(2)
+    : `${min.toFixed(2)}–${max.toFixed(2)}`;
+}
+
+function compareAtPriceText(
+  variants: { compareAtPrice?: string | null }[],
+): string {
+  const values = variants
+    .map((variant) => variant.compareAtPrice)
+    .filter((value): value is string => value !== undefined && value !== null)
+    .map(Number);
+
+  if (values.length === 0) return "—";
+
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+
+  return min === max
+    ? min.toFixed(2)
+    : `${min.toFixed(2)}–${max.toFixed(2)}`;
 }
 
 function changeRows(before: Snapshot, after: Snapshot): ChangeRow[] {
   const rows: ChangeRow[] = [];
+  if (
+  after.variants &&
+  before.variants &&
+  after.variants.some((variant) => variant.price !== undefined)
+) {
+  rows.push({
+    label: "Price",
+    from: priceText(before.variants),
+    to: priceText(after.variants),
+  });
+}
   if (after.variants && before.variants) {
-    rows.push({ label: "Price", from: priceText(before.variants), to: priceText(after.variants) });
+  const beforeById = new Map(
+    before.variants.map((variant) => [variant.id, variant.compareAtPrice]),
+  );
+
+  const compareAtChanged = after.variants.some(
+    (variant) =>
+      variant.compareAtPrice !== undefined &&
+      beforeById.get(variant.id) !== variant.compareAtPrice,
+  );
+
+  if (compareAtChanged) {
+    rows.push({
+      label: "Compare-at price",
+      from: compareAtPriceText(before.variants),
+      to: compareAtPriceText(after.variants),
+    });
   }
+}
   if (after.status !== undefined) {
     rows.push({ label: "Status", from: before.status ?? "", to: after.status });
   }
@@ -261,6 +313,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         data: {
           editSetJson: JSON.stringify(parsed.editSet),
           status: "staging",
+          heartbeatAt: null,
           errorCode: null,
           errorMessage: null,
         },
@@ -280,7 +333,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
     if (intent === "apply") {
       const updated = await db.job.updateMany({
         where: { id: job.id, shop: session.shop, status: "staged" },
-        data: { status: "queued" },
+        data: { status: "queued",
+          heartbeatAt: null,
+        },
       });
       if (updated.count === 0) {
         return json(

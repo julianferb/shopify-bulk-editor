@@ -8,6 +8,11 @@ const REQUIRED_VARS = [
   "DATABASE_URL",
 ] as const;
 
+process.env.SHOPIFY_APP_URL =
+  process.env.SHOPIFY_APP_URL ||
+  process.env.APP_URL ||
+  process.env.HOST;
+
 export function assertRequiredEnv(): void {
   const missing = REQUIRED_VARS.filter((name) => !process.env[name]);
 
@@ -17,5 +22,6 @@ export function assertRequiredEnv(): void {
     );
   }
 }
+
 
 assertRequiredEnv();
