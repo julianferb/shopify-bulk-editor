@@ -671,6 +671,21 @@ function Builder({
     if (nextField) setOps((prev) => [...prev, defaultOp(nextField)]);
   }, [usedFields]);
 
+  // Shortcut for the internal supplier product metafield. Existing generic
+  // metafield staging, preview, apply and undo logic remains unchanged.
+  const configureSupplier = useCallback(() => {
+    const supplier: OpDraft = {
+      field: "metafield", op: "set", value: "Ultra Sport",
+      namespace: "custom", key: "proveedor", type: "single_line_text_field",
+    };
+    setOps((prev) => {
+      const index = prev.findIndex((op) => op.field === "metafield");
+      if (index >= 0) return prev.map((op, i) => i === index ? supplier : op);
+      return [...prev, supplier];
+    });
+    setErrors([]);
+  }, []);
+
   const updateOp = useCallback((index: number, patch: Partial<OpDraft>) => {
     setOps((prev) => prev.map((op, current) => (current === index ? { ...op, ...patch } : op)));
   }, []);
@@ -776,6 +791,19 @@ function Builder({
                 </BlockStack>
               </Card>
             ) : null}
+
+            <Card>
+              <BlockStack gap="200">
+                <Text as="h2" variant="headingSm">Proveedor interno BONSA</Text>
+                <Text as="p" tone="subdued">
+                  Usa custom.proveedor para el proveedor de compra. La marca
+                  pública del producto (Vendor) permanece sin cambios.
+                </Text>
+                <InlineStack gap="200">
+                  <Button onClick={configureSupplier}>Configurar proveedor: Ultra Sport</Button>
+                </InlineStack>
+              </BlockStack>
+            </Card>
 
             {ops.map((op, index) => (
               <OperationCard

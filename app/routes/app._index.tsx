@@ -44,6 +44,7 @@ const BROWSE_QUERY = `#graphql
           title
           status
           vendor
+          metafield(namespace: "custom", key: "proveedor") { value }
           tags
           variantsCount { count }
           priceRangeV2 {
@@ -65,6 +66,7 @@ interface ProductNode {
   title: string;
   status: string;
   vendor: string | null;
+  metafield: { value: string } | null;
   tags: string[];
   variantsCount: { count: number } | null;
   priceRangeV2: {
@@ -144,6 +146,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         title: edge.node.title,
         status: edge.node.status,
         vendor: edge.node.vendor ?? "",
+        proveedor: edge.node.metafield?.value ?? "",
         tags: edge.node.tags,
         totalVariants: edge.node.variantsCount?.count ?? 0,
         priceRange: priceRange(edge.node),
@@ -569,7 +572,8 @@ export default function ProductsIndex() {
                   headings={[
                     { title: "Product" },
                     { title: "Status" },
-                    { title: "Vendor" },
+                    { title: "Marca (Vendor)" },
+                    { title: "Proveedor interno" },
                     { title: "Tags" },
                     { title: "Variants" },
                     { title: "Price range" },
@@ -597,6 +601,7 @@ export default function ProductsIndex() {
                         <Badge tone={statusTone(product.status)}>{product.status}</Badge>
                       </IndexTable.Cell>
                       <IndexTable.Cell>{product.vendor}</IndexTable.Cell>
+                      <IndexTable.Cell>{product.proveedor || "—"}</IndexTable.Cell>
                       <IndexTable.Cell>{product.tags.slice(0, 3).join(", ")}</IndexTable.Cell>
                       <IndexTable.Cell>{String(product.totalVariants)}</IndexTable.Cell>
                       <IndexTable.Cell>{product.priceRange}</IndexTable.Cell>
