@@ -25,6 +25,11 @@ export default function AppLayout() {
         <Link to="/app" rel="home">
           Products
         </Link>
+
+        <Link to="/app/products/new">
+          Create product
+        </Link>
+
         <Link to="/app/jobs">Jobs</Link>
         <Link to="/app/edit-sets">Edit sets</Link>
         <Link to="/app/import">Import</Link>

@@ -2,7 +2,7 @@
 
 client_id = "41d5775a943c8e05133d34a384bfe36e"
 name = "BonsaStore Bulk Editor"
-application_url = "https://example.com"
+application_url = "https://gurgle-patience-endurance.ngrok-free.dev"
 embedded = true
 
 [webhooks]
@@ -10,12 +10,14 @@ api_version = "2026-07"
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "read_products,write_products"
+scopes = "read_products,write_products,read_locations,read_inventory,write_inventory,read_publications,write_publications"
 optional_scopes = [ ]
 use_legacy_install_flow = false
 
 [auth]
-redirect_urls = [ ]
+redirect_urls = [
+    "https://gurgle-patience-endurance.ngrok-free.dev/auth/callback"
+ ]
 
 [build]
 automatically_update_urls_on_dev = true
